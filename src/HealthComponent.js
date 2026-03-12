@@ -58,6 +58,18 @@ class HealthComponent {
 
         this._log(`takeDamage(${amount}) → hp: ${this.hp}/${this.maxHp} (delta: ${delta})`);
 
+        // Broadcast to the scene so any listener (e.g. DamageText, HUD) can react
+        // without needing a direct reference to this component.
+        //
+        //   Payload: { owner, amount, fatal, currentHp, maxHp }
+        this._owner.scene?.events.emit('health-damaged', {
+            owner:     this._owner,
+            amount:    delta,
+            fatal:     this.hp <= 0,
+            currentHp: this.hp,
+            maxHp:     this.maxHp,
+        });
+
         if (this.hp <= 0) {
             this.hp = 0;
             this._triggerDie();

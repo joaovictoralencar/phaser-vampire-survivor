@@ -1,0 +1,145 @@
+// No import/export — Phaser is a global loaded via <script> tag in index.html
+// Load order: DamageText.js → HealthComponent.js → AttackComponent.js → Enemy.js → Player.js → Survivor.js
+//
+//  FONT SETUP REQUIRED
+//     Add this inside <head> in index.html to enable Roboto (or swap any Google Font):
+//
+//       <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700;900&display=swap" rel="stylesheet">
+//
+//     Phaser reads whatever fonts the browser has loaded — no extra plugin needed.
+
+/* =============================================================
+   DamageText
+
+   Spawns juicy floating damage numbers above any game-object
+   that takes a hit.
+
+   Usage (in your scene):
+
+     this.damageText = new DamageText(this);
+
+     // HealthComponent now emits 'health-damaged' automatically.
+     // Wire it up once after creating your objects:
+     this.events.on('health-damaged', ({ owner, amount }) => {
+         const top       = owner.getTopCenter();
+         const recipient = owner === this.player ? 'player' : 'enemy';
+         this.damageText.show(top.x, top.y, amount, recipient);
+     });
+
+   Constructor config (all optional):
+     fontFamily       string   'Roboto, sans-serif'
+     baseFontSize     number   22         base font size in px
+     strokeThickness  number   4          outline stroke width
+     floatDistance    number   48         px the number drifts upward
+     duration         number   950        full animation length in ms
+============================================================= */
+
+class DamageText {
+
+    /**
+     * @param {Phaser.Scene} scene
+     * @param {object}  [config]
+     * @param {string}  [config.fontFamily='Roboto, sans-serif']
+     * @param {number}  [config.baseFontSize=22]
+     * @param {number}  [config.strokeThickness=4]
+     * @param {number}  [config.floatDistance=48]
+     * @param {number}  [config.duration=950]
+     */
+    constructor(scene, config = {}) {
+        this._scene          = scene;
+        this.fontFamily      = config.fontFamily      ?? 'Roboto, sans-serif';
+        this.baseFontSize    = config.baseFontSize     ?? 22;
+        this.strokeThickness = config.strokeThickness ?? 4;
+        this.floatDistance   = config.floatDistance   ?? 48;
+        this.duration        = config.duration        ?? 950;
+    }
+
+    /* ----------------------------------------------------------
+       Public API
+    ---------------------------------------------------------- */
+
+    /**
+     * Spawn a floating damage number at world position (x, y).
+     *
+     * @param {number}           x          World X — centre of the sprite
+     * @param {number}           y          World Y — top edge of the sprite (use getTopCenter().y)
+     * @param {number}           amount     Damage dealt (positive integer)
+     * @param {'player'|'enemy'} recipient  Who was hit — drives colour palette
+     */
+    show(x, y, amount, recipient = 'enemy') {
+
+        const { color, fontSize } = this._resolveStyle(amount, recipient);
+
+        // Tiny random horizontal jitter so back-to-back hits don't perfectly overlap
+        const jitterX = Phaser.Math.Between(-10, 10);
+
+        const text = this._scene.add.text(x + jitterX, y - 4, `-${amount}`, {
+            fontFamily:      this.fontFamily,
+            fontStyle:       'bold',
+            fontSize:        `${fontSize}px`,
+            color,
+            stroke:          '#000000',
+            strokeThickness: this.strokeThickness,
+            shadow: {
+                offsetX: 1,
+                offsetY: 2,
+                color:   '#000000',
+                blur:    3,
+                fill:    true,
+            },
+        })
+            .setOrigin(0.5, 1)
+            .setDepth(9999)
+            .setScale(0);
+
+        // ── Two-phase tween ──────────────────────────────────
+        //  Phase 1 — Pop in:  scale 0 → 1.4  (Back.Out = springy overshoot)
+        //  Phase 2 — Resolve: scale 1.4 → 1, drift upward, fade to 0
+        this._scene.tweens.chain({
+            targets: text,
+            tweens: [
+                {
+                    scaleX:   1.4,
+                    scaleY:   1.4,
+                    duration: 90,
+                    ease:     'Back.Out',
+                },
+                {
+                    scaleX:   1,
+                    scaleY:   1,
+                    y:        text.y - this.floatDistance,
+                    alpha:    0,
+                    duration: this.duration - 90,
+                    ease:     'Cubic.Out',
+                    onComplete: () => text.destroy(),
+                },
+            ],
+        });
+    }
+
+    /* ----------------------------------------------------------
+       Internal helpers
+    ---------------------------------------------------------- */
+
+    /**
+     * Returns the colour string and font size for the given hit.
+     *
+     * Player taking damage  →  red palette, size scales with amount
+     * Enemy  taking damage  →  white → gold → orange by threshold
+     */
+    _resolveStyle(amount, recipient) {
+
+        if (recipient === 'player') {
+            const extra    = Math.min(Math.floor(amount / 15) * 2, 12);
+            const fontSize = this.baseFontSize + extra;
+            const color    = amount >= 40 ? '#ff2222' : '#ff6666';
+            return { color, fontSize };
+        }
+
+        // Enemy hit colour ramp
+        if (amount >= 60) return { color: '#ff4400', fontSize: this.baseFontSize + 10 };
+        if (amount >= 35) return { color: '#ff9900', fontSize: this.baseFontSize + 5  };
+        if (amount >= 15) return { color: '#ffdd00', fontSize: this.baseFontSize + 2  };
+        return                   { color: '#ffffff', fontSize: this.baseFontSize       };
+    }
+}
