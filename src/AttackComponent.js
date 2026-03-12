@@ -83,7 +83,12 @@ class AttackComponent {
      - Enabled for `duration` ms then auto-disabled
      - Registered as an overlap against a Phaser Group
 
-   Sensible offset/size defaults that the owner can override.
+   Per-swing hit deduplication:
+     The Phaser overlap callback fires every physics step while the
+     zone is active (~4-5 times in 80 ms at 60 fps). A _hitTargets
+     Set records every target struck during a single swing so each
+     enemy can only be hit once per trigger(). The Set is cleared at
+     the start of every new swing.
 ============================================================= */
 
 class MeleeAttackComponent extends AttackComponent {
@@ -112,9 +117,13 @@ class MeleeAttackComponent extends AttackComponent {
 
         super(owner, { damage, onHit });
 
-        this._duration    = duration;
-        this._hitboxSize  = hitboxSize;
+        this._duration     = duration;
+        this._hitboxSize   = hitboxSize;
         this._targetsGroup = targetsGroup ?? null;
+
+        // Tracks targets already hit during the current swing.
+        // Cleared at the start of every trigger() so combos can re-hit.
+        this._hitTargets = new Set();
 
         // Merge caller overrides on top of sensible defaults
         this._offsets = Object.assign({
@@ -124,8 +133,8 @@ class MeleeAttackComponent extends AttackComponent {
             right: { x:  40, y:   0 },
         }, offsets);
 
-        this._hitTimer    = null;
-        this._hitbox      = this._createHitbox();
+        this._hitTimer  = null;
+        this._hitbox    = this._createHitbox();
         this._registerOverlap();
     }
 
@@ -134,6 +143,9 @@ class MeleeAttackComponent extends AttackComponent {
     ---------------------------------------------------------- */
 
     _doTrigger(direction) {
+
+        // Fresh swing — clear targets from any previous attack
+        this._hitTargets.clear();
 
         const { w, h }   = this._hitboxSize;
         const isVertical = direction === 'up' || direction === 'down';
@@ -187,7 +199,14 @@ class MeleeAttackComponent extends AttackComponent {
         this._owner.scene.physics.add.overlap(
             this._hitbox,
             this._targetsGroup,
-            (_hitbox, target) => this._fireOnHit(target),
+            (_hitbox, target) => {
+
+                // Skip if this target was already hit in the current swing
+                if (this._hitTargets.has(target)) return;
+
+                this._hitTargets.add(target);
+                this._fireOnHit(target);
+            },
             null,
             this
         );
@@ -195,6 +214,7 @@ class MeleeAttackComponent extends AttackComponent {
 
     _disableHitbox() {
         if (this._hitbox?.body) this._hitbox.body.enable = false;
+        this._hitTargets.clear();
         this.isAttacking = false;
     }
 }
