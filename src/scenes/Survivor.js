@@ -60,6 +60,32 @@ class Survivor extends Phaser.Scene {
         // Wire enemies to track the now-created player
         this.enemies.getChildren().forEach(e => e.setTarget(this.player));
 
+        // ── DamageText ──────────────────────────────────────────
+        // Swap fontFamily here to change the damage number font globally.
+        // Any Google Font loaded in index.html works — Roboto is the default.
+        this.damageText = new DamageText(this, {
+            fontFamily:     'Roboto, sans-serif',
+            baseFontSize:   22,
+            strokeThickness: 4,
+            floatDistance:  50,
+            duration:       950,
+        });
+
+        // HealthComponent emits 'health-damaged' on every hit (fatal or not).
+        // We resolve who was hit, grab the top-centre of their sprite, and fire.
+        this.events.on('health-damaged', ({ owner, amount }) => {
+
+            if (!owner.active) return;
+
+            const top       = owner.getTopCenter();
+            const recipient = owner === this.player ? 'player' : 'enemy';
+
+            this.damageText.show(top.x, top.y, amount, recipient);
+        });
+
+        // ── HUD ────────────────────────────────────────────────
+        this._createHud(width, height);
+
         // Listen for player death to trigger game over
         this.events.once('player-died', this._onPlayerDied, this);
 
@@ -71,12 +97,137 @@ class Survivor extends Phaser.Scene {
     }
 
     /* =========================================================
+       UPDATE
+    ========================================================= */
+
+    update() {
+        this._updateHud();
+    }
+
+    /* =========================================================
        SCENE EVENTS
     ========================================================= */
 
     _onPlayerDied() {
-        // TODO: show game-over UI, restart prompt, etc.
+        // Update HUD one last time to show 0 HP
+        if (this._hudHpValue) {
+            this._hudHpValue.setText('0');
+            this._hudHpValue.setColor('#ff4444');
+        }
+        if (this._hudHpBar) this._hudHpBar.setScale(0, 1);
+
         console.log('Player died — game over');
+    }
+
+    /* =========================================================
+       HUD
+    ========================================================= */
+
+    /**
+     * Creates a fixed-screen HUD with:
+     *   • Heart icon + current / max HP (top-left)
+     *   • "K  Attack" hint (bottom-right)
+     *
+     * All elements use scrollFactor(0) so they stay put even if
+     * the camera ever moves.
+     *
+     * Font is the same as DamageText — change FONT_FAMILY below
+     * to update both at once (or pass them separately if needed).
+     */
+    _createHud(width, height) {
+
+        const FONT_FAMILY  = 'Roboto, sans-serif';
+        const PAD          = 16;          // outer padding from screen edges
+        const BAR_W        = 120;         // HP bar width
+        const BAR_H        = 10;
+        const BAR_Y_OFFSET = 30;          // px below the HP text line
+
+        const maxHp = this.player.health.maxHp;
+
+        // ── HP label ─────────────────────────────────────────
+        this._hudHpLabel = this.add.text(PAD, PAD, '❤', {
+            fontFamily: FONT_FAMILY,
+            fontStyle:  'bold',
+            fontSize:   '18px',
+            color:      '#ff4444',
+        })
+            .setDepth(10000)
+            .setScrollFactor(0);
+
+        // Current HP value (updates every frame)
+        this._hudHpValue = this.add.text(PAD + 26, PAD, `${maxHp}`, {
+            fontFamily: FONT_FAMILY,
+            fontStyle:  'bold',
+            fontSize:   '18px',
+            color:      '#ffffff',
+        })
+            .setDepth(10000)
+            .setScrollFactor(0);
+
+        // Max HP
+        this._hudHpMax = this.add.text(PAD + 26, PAD, `/ ${maxHp}`, {
+            fontFamily: FONT_FAMILY,
+            fontSize:   '14px',
+            color:      '#aaaaaa',
+        })
+            .setDepth(10000)
+            .setScrollFactor(0);
+        // Position the max label to the right of the value once text is set
+        // (repositioned in _updateHud on first frame)
+
+        // ── HP bar (thin bar under the numbers) ──────────────
+        // Background track
+        this.add.rectangle(PAD, PAD + BAR_Y_OFFSET, BAR_W, BAR_H, 0x333333)
+            .setOrigin(0, 0)
+            .setDepth(9999)
+            .setScrollFactor(0);
+
+        // Filled portion — scale X from 0 to 1 to represent ratio
+        this._hudHpBar = this.add.rectangle(PAD, PAD + BAR_Y_OFFSET, BAR_W, BAR_H, 0x44dd44)
+            .setOrigin(0, 0)
+            .setDepth(10000)
+            .setScrollFactor(0);
+
+        // ── Control hint (bottom-right) ───────────────────────
+        this._hudHint = this.add.text(width - PAD, height - PAD, 'K  —  Attack', {
+            fontFamily: FONT_FAMILY,
+            fontSize:   '14px',
+            color:      '#cccccc',
+            alpha:      0.75,
+        })
+            .setOrigin(1, 1)
+            .setDepth(10000)
+            .setScrollFactor(0);
+    }
+
+    /** Called from update() — keeps HP display in sync each frame. */
+    _updateHud() {
+
+        if (!this.player || !this._hudHpValue) return;
+
+        const { hp, maxHp, isDead } = this.player.health;
+
+        // Current HP text
+        this._hudHpValue.setText(`${Math.max(0, Math.ceil(hp))}`);
+
+        // Colour shifts: green → yellow → red
+        const ratio = hp / maxHp;
+        let barColor;
+        if (ratio > 0.5)       barColor = 0x44dd44;
+        else if (ratio > 0.25) barColor = 0xddcc00;
+        else                   barColor = 0xdd2222;
+
+        this._hudHpBar
+            .setFillStyle(barColor)
+            .setScale(ratio, 1);
+
+        // HP text colour when low
+        const textColor = ratio <= 0.25 ? '#ff4444' : '#ffffff';
+        this._hudHpValue.setColor(textColor);
+
+        // Position "/ maxHp" just to the right of the dynamic value
+        const valueRight = this._hudHpValue.x + this._hudHpValue.width + 4;
+        this._hudHpMax.setX(valueRight);
     }
 
     /* =========================================================
