@@ -60,7 +60,7 @@ class Survivor extends Phaser.Scene {
 
     create() {
 
-        const { width, height } = this.scale;
+        const {width, height} = this.scale;
 
         this._createFloor();
 
@@ -73,7 +73,7 @@ class Survivor extends Phaser.Scene {
         const creepyConfig = this.cache.json.get('enemy-creepy');
         this._createEnemyAnimations(creepyConfig);
 
-        this.enemies = this.physics.add.group({ runChildUpdate: true });
+        this.enemies = this.physics.add.group({runChildUpdate: true});
         this._spawnEnemies(creepyConfig, 10, width, height);
 
         // Wire sword → enemy overlap (enemies group lives here, not in Player)
@@ -92,12 +92,8 @@ class Survivor extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, width, height);
     }
 
-    /* =========================================================
-       UPDATE
-       (Player.preUpdate and Enemy.preUpdate run automatically.)
-    ========================================================= */
-
-    // update() intentionally omitted — nothing scene-level to do each frame.
+    update() {
+    }
 
     /* =========================================================
        ASSET LOADING HELPERS
@@ -105,21 +101,21 @@ class Survivor extends Phaser.Scene {
 
     _loadEnemySpritesheets(config) {
 
-        const { spritePath, spritePrefix, frameHeight, animations } = config;
+        const {spritePath, spritePrefix, frameHeight, animations} = config;
 
         Object.entries(animations).forEach(([animName, data]) => {
 
-            const key        = spritePrefix + animName;
+            const key = spritePrefix + animName;
             const frameWidth = data.totalWidth / data.cols;
-            const path       = `${spritePath}${key}.png`;
+            const path = `${spritePath}${key}.png`;
 
-            this.load.spritesheet(key, path, {frameWidth, frameHeight });
+            this.load.spritesheet(key, path, {frameWidth, frameHeight});
         });
     }
 
     _createEnemyAnimations(config) {
 
-        const { spritePrefix, animations } = config;
+        const {spritePrefix, animations} = config;
 
         Object.entries(animations).forEach(([animName, data]) => {
 
@@ -129,10 +125,10 @@ class Survivor extends Phaser.Scene {
                 key,
                 frames: this.anims.generateFrameNumbers(key, {
                     start: 0,
-                    end:   data.cols - 1,
+                    end: data.cols - 1,
                 }),
                 frameRate: data.fps,
-                repeat:    data.repeat,
+                repeat: data.repeat,
             });
         });
     }
@@ -143,15 +139,15 @@ class Survivor extends Phaser.Scene {
 
     _createFloor() {
 
-        const { width, height } = this.scale;
+        const {width, height} = this.scale;
         const mapData = this.cache.json.get('map');
-        const { cols, tileSize, tileset, detail } = mapData;
+        const {cols, tileSize, tileset, detail} = mapData;
         const scale = tileSize / 1024;
 
         this.make.tileSprite({
             x: 0, y: 0, width, height,
             key: 'grass1',
-            origin: { x: 0, y: 0 },
+            origin: {x: 0, y: 0},
             add: true,
         })
             .setDepth(0)
