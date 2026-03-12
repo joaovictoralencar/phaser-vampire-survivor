@@ -192,7 +192,7 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
      */
     _scheduleDamageHit() {
 
-        const HIT_DELAY   = 200;   // ms — adjust to match the swing frame
+        const HIT_DELAY   = 350;   // ms — adjust to match the swing frame
         const DOT_MIN     = 0.5;   // cos(60°) — target must be within 60° of facing
 
         this.scene.time.delayedCall(HIT_DELAY, () => {
