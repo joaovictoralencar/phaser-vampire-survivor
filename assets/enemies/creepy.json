@@ -25,14 +25,14 @@
         },
         "attack1": {
             "cols": 7,
-            "totalWidth": 175,
+            "totalWidth": 210,
             "fps": 12,
             "repeat": 0
         },
         "attack2": {
             "cols": 14,
-            "totalWidth": 504,
-            "fps": 10,
+            "totalWidth": 868,
+            "fps": 12,
             "repeat": 0
         },
         "hit": {

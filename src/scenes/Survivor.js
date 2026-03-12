@@ -1,22 +1,5 @@
 // No import/export — Phaser is a global loaded via <script> tag in index.html
-// Load order: Enemy.js → Player.js → Survivor.js
-
-/**
- * Survivor Scene
- *
- * Responsible for:
- *  - Loading assets described in enemy JSON configs
- *  - Creating the map, player, enemies, and wiring overlaps
- *
- * Player movement, input, attack, and hitbox logic all live in Player.js.
- * Enemy AI lives in Enemy.js.
- *
- * Adding a new enemy type only requires:
- *  1. Drop a new JSON in assets/enemies/
- *  2. this.load.json('myEnemy', 'assets/enemies/myEnemy.json') in preload()
- *  3. Call this._loadEnemySpritesheets() + this._createEnemyAnimations() with that config
- *  4. Spawn enemies with this._spawnEnemies(config, count)
- */
+// Load order: HealthComponent.js → AttackComponent.js → Enemy.js → Player.js → Survivor.js
 
 class Survivor extends Phaser.Scene {
 
@@ -30,7 +13,6 @@ class Survivor extends Phaser.Scene {
 
     preload() {
 
-        // --- Tiles ---
         const T = 'assets/GroundTiles/';
         ['grass1', 'grass2', 'grass3',
             'cobblestone1', 'cobblestone2', 'cobblestone3',
@@ -40,13 +22,11 @@ class Survivor extends Phaser.Scene {
 
         this.load.json('map', 'assets/map.json');
 
-        // --- Player ---
         this.load.spritesheet('knight', 'assets/Characters/skull knight-Sheet.png', {
-            frameWidth: 64,
+            frameWidth:  64,
             frameHeight: 64,
         });
 
-        // --- Enemy configs ---
         this.load.json('enemy-creepy', 'assets/enemies/creepy.json');
 
         this.load.once('filecomplete-json-enemy-creepy', (_key, _type, config) => {
@@ -60,30 +40,28 @@ class Survivor extends Phaser.Scene {
 
     create() {
 
-        const {width, height} = this.scale;
+        const { width, height } = this.scale;
 
         this._createFloor();
 
-        // Player — animations, input, hitbox, and preUpdate all self-contained
-        this.player = new Player(this, width / 2, height / 2, {
-            debug: true,
-        });
-
-        // Enemies
+        // Enemies group must exist before Player so it can be passed in
         const creepyConfig = this.cache.json.get('enemy-creepy');
         this._createEnemyAnimations(creepyConfig);
 
-        this.enemies = this.physics.add.group({runChildUpdate: true});
+        this.enemies = this.physics.add.group({ runChildUpdate: true });
         this._spawnEnemies(creepyConfig, 10, width, height);
 
-        // Wire sword → enemy overlap (enemies group lives here, not in Player)
-        this.physics.add.overlap(
-            this.player.swordHitbox,
-            this.enemies,
-            this.player.onSwordHit,
-            null,
-            this.player   // callbackContext → keeps `this` = player inside handler
-        );
+        // Player wires its own overlap against the enemies group internally
+        this.player = new Player(this, width / 2, height / 2, {
+            debug:        false,
+            enemiesGroup: this.enemies,
+        });
+
+        // Wire enemies to track the now-created player
+        this.enemies.getChildren().forEach(e => e.setTarget(this.player));
+
+        // Listen for player death to trigger game over
+        this.events.once('player-died', this._onPlayerDied, this);
 
         if (this.player.DEBUG_HITBOX) {
             this.physics.world.createDebugGraphic();
@@ -92,7 +70,13 @@ class Survivor extends Phaser.Scene {
         this.physics.world.setBounds(0, 0, width, height);
     }
 
-    update() {
+    /* =========================================================
+       SCENE EVENTS
+    ========================================================= */
+
+    _onPlayerDied() {
+        // TODO: show game-over UI, restart prompt, etc.
+        console.log('Player died — game over');
     }
 
     /* =========================================================
@@ -101,21 +85,21 @@ class Survivor extends Phaser.Scene {
 
     _loadEnemySpritesheets(config) {
 
-        const {spritePath, spritePrefix, frameHeight, animations} = config;
+        const { spritePath, spritePrefix, frameHeight, animations } = config;
 
         Object.entries(animations).forEach(([animName, data]) => {
 
-            const key = spritePrefix + animName;
+            const key        = spritePrefix + animName;
             const frameWidth = data.totalWidth / data.cols;
-            const path = `${spritePath}${key}.png`;
+            const path       = `${spritePath}${key}.png`;
 
-            this.load.spritesheet(key, path, {frameWidth, frameHeight});
+            this.load.spritesheet(key, path, { frameWidth, frameHeight });
         });
     }
 
     _createEnemyAnimations(config) {
 
-        const {spritePrefix, animations} = config;
+        const { spritePrefix, animations } = config;
 
         Object.entries(animations).forEach(([animName, data]) => {
 
@@ -125,10 +109,10 @@ class Survivor extends Phaser.Scene {
                 key,
                 frames: this.anims.generateFrameNumbers(key, {
                     start: 0,
-                    end: data.cols - 1,
+                    end:   data.cols - 1,
                 }),
                 frameRate: data.fps,
-                repeat: data.repeat,
+                repeat:    data.repeat,
             });
         });
     }
@@ -139,16 +123,16 @@ class Survivor extends Phaser.Scene {
 
     _createFloor() {
 
-        const {width, height} = this.scale;
+        const { width, height } = this.scale;
         const mapData = this.cache.json.get('map');
-        const {cols, tileSize, tileset, detail} = mapData;
+        const { cols, tileSize, tileset, detail } = mapData;
         const scale = tileSize / 1024;
 
         this.make.tileSprite({
             x: 0, y: 0, width, height,
-            key: 'grass1',
-            origin: {x: 0, y: 0},
-            add: true,
+            key:    'grass1',
+            origin: { x: 0, y: 0 },
+            add:    true,
         })
             .setDepth(0)
             .setTileScale(scale, scale);
@@ -176,13 +160,11 @@ class Survivor extends Phaser.Scene {
 
         for (let i = 0; i < count; i++) {
 
-            const x = Phaser.Math.Between(MARGIN, width - MARGIN);
+            const x = Phaser.Math.Between(MARGIN, width  - MARGIN);
             const y = Phaser.Math.Between(MARGIN, height - MARGIN);
 
             const enemy = new Enemy(this, x, y, config);
-
             enemy.setDepth(2);
-            enemy.setTarget(this.player);
             enemy.play(config.spritePrefix + 'idle');
 
             this.enemies.add(enemy);
