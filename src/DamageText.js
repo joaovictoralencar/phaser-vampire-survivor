@@ -1,12 +1,10 @@
 // No import/export — Phaser is a global loaded via <script> tag in index.html
 // Load order: DamageText.js → HealthComponent.js → AttackComponent.js → Enemy.js → Player.js → Survivor.js
 //
-//  FONT SETUP REQUIRED
+// ⚠️  FONT SETUP REQUIRED
 //     Add this inside <head> in index.html to enable Roboto (or swap any Google Font):
 //
 //       <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@700;900&display=swap" rel="stylesheet">
-//
-//     Phaser reads whatever fonts the browser has loaded — no extra plugin needed.
 
 /* =============================================================
    DamageText
@@ -18,8 +16,6 @@
 
      this.damageText = new DamageText(this);
 
-     // HealthComponent now emits 'health-damaged' automatically.
-     // Wire it up once after creating your objects:
      this.events.on('health-damaged', ({ owner, amount }) => {
          const top       = owner.getTopCenter();
          const recipient = owner === this.player ? 'player' : 'enemy';
@@ -28,10 +24,10 @@
 
    Constructor config (all optional):
      fontFamily       string   'Roboto, sans-serif'
-     baseFontSize     number   22         base font size in px
-     strokeThickness  number   4          outline stroke width
-     floatDistance    number   48         px the number drifts upward
-     duration         number   950        full animation length in ms
+     baseFontSize     number   22
+     strokeThickness  number   4
+     floatDistance    number   48
+     duration         number   950
 ============================================================= */
 
 class DamageText {
@@ -52,6 +48,9 @@ class DamageText {
         this.strokeThickness = config.strokeThickness ?? 4;
         this.floatDistance   = config.floatDistance   ?? 48;
         this.duration        = config.duration        ?? 950;
+
+        // Render text at native screen DPI so pixelArt mode doesn't blur it
+        this._resolution = window.devicePixelRatio || 2;
     }
 
     /* ----------------------------------------------------------
@@ -61,16 +60,14 @@ class DamageText {
     /**
      * Spawn a floating damage number at world position (x, y).
      *
-     * @param {number}           x          World X — centre of the sprite
-     * @param {number}           y          World Y — top edge of the sprite (use getTopCenter().y)
-     * @param {number}           amount     Damage dealt (positive integer)
-     * @param {'player'|'enemy'} recipient  Who was hit — drives colour palette
+     * @param {number}           x
+     * @param {number}           y          Top edge of the sprite (getTopCenter().y)
+     * @param {number}           amount     Damage dealt
+     * @param {'player'|'enemy'} recipient  Drives colour palette
      */
     show(x, y, amount, recipient = 'enemy') {
 
         const { color, fontSize } = this._resolveStyle(amount, recipient);
-
-        // Tiny random horizontal jitter so back-to-back hits don't perfectly overlap
         const jitterX = Phaser.Math.Between(-10, 10);
 
         const text = this._scene.add.text(x + jitterX, y - 4, `-${amount}`, {
@@ -90,11 +87,9 @@ class DamageText {
         })
             .setOrigin(0.5, 1)
             .setDepth(9999)
+            .setResolution(this._resolution)   // ← crisp text even with pixelArt: true
             .setScale(0);
 
-        // ── Two-phase tween ──────────────────────────────────
-        //  Phase 1 — Pop in:  scale 0 → 1.4  (Back.Out = springy overshoot)
-        //  Phase 2 — Resolve: scale 1.4 → 1, drift upward, fade to 0
         this._scene.tweens.chain({
             targets: text,
             tweens: [
@@ -118,15 +113,9 @@ class DamageText {
     }
 
     /* ----------------------------------------------------------
-       Internal helpers
+       Internal
     ---------------------------------------------------------- */
 
-    /**
-     * Returns the colour string and font size for the given hit.
-     *
-     * Player taking damage  →  red palette, size scales with amount
-     * Enemy  taking damage  →  white → gold → orange by threshold
-     */
     _resolveStyle(amount, recipient) {
 
         if (recipient === 'player') {
@@ -136,7 +125,6 @@ class DamageText {
             return { color, fontSize };
         }
 
-        // Enemy hit colour ramp
         if (amount >= 60) return { color: '#ff4400', fontSize: this.baseFontSize + 10 };
         if (amount >= 35) return { color: '#ff9900', fontSize: this.baseFontSize + 5  };
         if (amount >= 15) return { color: '#ffdd00', fontSize: this.baseFontSize + 2  };
