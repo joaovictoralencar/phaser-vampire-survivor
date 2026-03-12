@@ -1,0 +1,57 @@
+{
+    "name": "creepy",
+    "spritePrefix": "creepy-",
+    "spritePath": "assets/Characters/Enemy/",
+    "frameHeight": 23,
+    "stats": {
+        "hp": 200,
+        "damage": 10,
+        "speed": 80,
+        "detectionRadius": 200,
+        "attackRadius": 40
+    },
+    "animations": {
+        "idle": {
+            "cols": 8,
+            "totalWidth": 184,
+            "fps": 12,
+            "repeat": -1
+        },
+        "walk": {
+            "cols": 8,
+            "totalWidth": 168,
+            "fps": 12,
+            "repeat": -1
+        },
+        "attack1": {
+            "cols": 7,
+            "totalWidth": 175,
+            "fps": 12,
+            "repeat": 0
+        },
+        "attack2": {
+            "cols": 14,
+            "totalWidth": 504,
+            "fps": 10,
+            "repeat": 0
+        },
+        "hit": {
+            "cols": 3,
+            "totalWidth": 63,
+            "fps": 10,
+            "repeat": 0
+        },
+        "die": {
+            "cols": 13,
+            "totalWidth": 299,
+            "fps": 10,
+            "repeat": 0
+        },
+        "awakening": {
+            "cols": 15,
+            "totalWidth": 315,
+            "fps": 10,
+            "repeat": 0
+        }
+    }
+}
