@@ -1,31 +1,14 @@
-/**
- * Enemy
- *
- * Extends Phaser.Physics.Arcade.Sprite so each enemy owns its own
- * physics body, animation state, stats, and AI logic.
- *
- * The constructor calls scene.add.existing() and scene.physics.add.existing()
- * internally — this is the required Phaser pattern so that this.body is
- * populated before _setupPhysics() runs. The scene must NOT call those
- * methods again after construction.
- *
- * Usage:
- *   const enemy = new Enemy(scene, x, y, creepyConfig);
- *   // body, display list, and physics are already wired — just add to group:
- *   this.enemies.add(enemy);
- */
-
 // No import/export — Phaser is a global loaded via <script> tag in index.html
-// Enemy.js must be loaded via its own <script> tag BEFORE Survivor.js
+// Load order: HealthComponent.js → AttackComponent.js → Enemy.js → Player.js → Survivor.js
 
 const EnemyState = {
     AWAKENING: 'awakening',
-    IDLE: 'idle',
-    WALK: 'walk',
-    ATTACK1: 'attack1',
-    ATTACK2: 'attack2',
-    HIT: 'hit',
-    DIE: 'die',
+    IDLE:      'idle',
+    WALK:      'walk',
+    ATTACK1:   'attack1',
+    ATTACK2:   'attack2',
+    HIT:       'hit',
+    DIE:       'die',
 };
 
 class Enemy extends Phaser.Physics.Arcade.Sprite {
@@ -36,34 +19,48 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     constructor(scene, x, y, config) {
 
-        // Start on the idle texture so Phaser can size the body immediately
         super(scene, x, y, config.spritePrefix + 'idle', 0);
 
         this._config = config;
-        this._state = EnemyState.IDLE;
+        this._state  = EnemyState.IDLE;
 
-        // --- Stats (copied from config so they can change per-instance) ---
         const s = config.stats;
-        this.hp = s.hp;
-        this.maxHp = s.hp;
         this.damage = s.damage;
-        this.speed = s.speed;
+        this.speed  = s.speed;
 
         this._detectionRadius = s.detectionRadius;
-        this._attackRadius = s.attackRadius;
+        this._attackRadius    = s.attackRadius;
+        this._target          = null;
 
-        // --- Internal flags ---
-        this._isHurt = false;
-        this._isDead = false;
-        this._target = null;  // set from outside (usually the player)
-
-        // Register with the display list and physics world NOW so that
-        // this.body is not null when _setupPhysics() runs below.
         scene.add.existing(this);
         scene.physics.add.existing(this);
 
         this._setupPhysics();
         this._setupAnimEvents();
+
+        this.health = new HealthComponent(this, {
+            hp: s.hp,
+
+            onHit: () => {
+                this.health.isHurt = true;
+                this._state = EnemyState.HIT;
+                this.setTint(0xff4444);
+                this.setVelocity(0, 0);
+                this.play(this._config.spritePrefix + EnemyState.HIT, true);
+
+                this.scene.time.delayedCall(120, () => {
+                    if (this.active) this.clearTint();
+                });
+            },
+
+            onDie: () => {
+                this._state = EnemyState.DIE;
+                this.setVelocity(0, 0);
+                this.setTint(0xff2222);
+                this.body.enable = false;
+                this.play(this._config.spritePrefix + EnemyState.DIE, true);
+            },
+        });
     }
 
     /* ----------------------------------------------------------
@@ -72,20 +69,24 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
 
     _setupPhysics() {
         this.setScale(2);
+        this.setOrigin(0.5, 1);
         this.setCollideWorldBounds(true);
         this.body.setAllowGravity(false);
 
-        // Tighter hitbox than the full sprite frame
-        this.setBodySize(14, 18);
-        this.setOffset(
-            (this.width - 14) / 2,
-            (this.height - 18) / 2
-        );
+        this._bodyW = 14;
+        this._bodyH = 18;
+        this.setBodySize(this._bodyW, this._bodyH);
+        this._refreshBodyOffset();
+    }
+
+    _refreshBodyOffset() {
+        const offsetX = (this.frame.realWidth  - this._bodyW) / 2;
+        const offsetY =  this.frame.realHeight - this._bodyH;
+        this.setOffset(offsetX, offsetY);
     }
 
     _setupAnimEvents() {
 
-        // When a non-looping animation finishes, decide what to do next
         this.on('animationcomplete', (anim) => {
 
             const p = this._config.spritePrefix;
@@ -96,14 +97,14 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
             }
 
             if (anim.key === p + EnemyState.HIT) {
-                this._isHurt = false;
+                this.health.isHurt = false;
                 this._transitionToIdle();
                 return;
             }
 
             if (
-                anim.key === p + EnemyState.ATTACK1 ||
-                anim.key === p + EnemyState.ATTACK2 ||
+                anim.key === p + EnemyState.ATTACK1  ||
+                anim.key === p + EnemyState.ATTACK2  ||
                 anim.key === p + EnemyState.AWAKENING
             ) {
                 this._transitionToIdle();
@@ -115,41 +116,26 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
        Public API
     ---------------------------------------------------------- */
 
-    /** Assign the target the enemy will track (usually the player sprite). */
     setTarget(target) {
         this._target = target;
     }
 
-    /** Apply damage; plays hit / die animation automatically. */
-    takeDamage(amount) {
-
-        if (this._isDead) return;
-
-        this.hp -= amount;
-
-        if (this.hp <= 0) {
-            this._die();
-        } else {
-            this._playHit();
-        }
-    }
-
     /* ----------------------------------------------------------
-       Phaser update hook (called automatically when
-       runChildUpdate: true is set on the parent group)
+       Phaser update hook
     ---------------------------------------------------------- */
 
     preUpdate(time, delta) {
 
         super.preUpdate(time, delta);
 
-        if (this._isDead || this._isHurt) return;
+        if (this.health.isDead || this.health.isHurt) return;
 
+        this._refreshBodyOffset();
         this._runAI();
     }
 
     /* ----------------------------------------------------------
-       AI logic
+       AI
     ---------------------------------------------------------- */
 
     _runAI() {
@@ -164,13 +150,9 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
             this._target.x, this._target.y
         );
 
-        if (dist <= this._attackRadius) {
-            this._tryAttack();
-        } else if (dist <= this._detectionRadius) {
-            this._chaseTarget();
-        } else {
-            this._transitionToIdle();
-        }
+        if (dist <= this._attackRadius)         this._tryAttack();
+        else if (dist <= this._detectionRadius) this._chaseTarget();
+        else                                    this._transitionToIdle();
     }
 
     _chaseTarget() {
@@ -179,10 +161,7 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
             this._state === EnemyState.ATTACK2) return;
 
         this._setState(EnemyState.WALK);
-
         this.scene.physics.moveToObject(this, this._target, this.speed);
-
-        // Flip sprite to face the direction of movement
         this.setFlipX(this._target.x < this.x);
     }
 
@@ -193,12 +172,57 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
 
         this.setVelocity(0, 0);
 
-        // Alternate between attack1 and attack2 randomly for variety
         const attackKey = Math.random() < 0.6
             ? EnemyState.ATTACK1
             : EnemyState.ATTACK2;
 
         this._setState(attackKey);
+        this._scheduleDamageHit();
+    }
+
+    /**
+     * Deals damage at the visual mid-point of the attack animation.
+     *
+     * Uses a directional cone check instead of a plain radius so the
+     * hit only lands when the target is roughly in front of the enemy —
+     * matching the visible swing direction.
+     *
+     *   dot product of (enemy→target) · (enemy facing) > threshold
+     *   means the target is within ~45° of the facing direction.
+     */
+    _scheduleDamageHit() {
+
+        const HIT_DELAY   = 200;   // ms — adjust to match the swing frame
+        const DOT_MIN     = 0.5;   // cos(60°) — target must be within 60° of facing
+
+        this.scene.time.delayedCall(HIT_DELAY, () => {
+
+            if (this.health.isDead)                        return;
+            if (!this._target || !this._target.active)     return;
+            if (this._target.health?.isDead)               return;
+
+            const dx   = this._target.x - this.x;
+            const dy   = this._target.y - this.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+
+            if (dist > this._attackRadius) return;
+
+            // Facing direction: sprite is flipped when target is to the left
+            // Use the raw dx to derive a normalised facing vector
+            const facingX = this.flipX ? -1 : 1;
+
+            // Normalise enemy→target vector and dot against facing
+            const dot = (dx / dist) * facingX;
+
+            // Additionally bias downward hits: if target is mostly below,
+            // relax the horizontal dot threshold so the attack still lands
+            const targetBelow = dy > 0 && Math.abs(dy) > Math.abs(dx);
+            const passes      = targetBelow || dot >= DOT_MIN;
+
+            if (!passes) return;
+
+            this._target.health?.takeDamage(this.damage);
+        });
     }
 
     _transitionToIdle() {
@@ -212,41 +236,10 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
     ---------------------------------------------------------- */
 
     _setState(newState) {
-
         if (this._state === newState) return;
-        if (this._isDead) return;
+        if (this.health.isDead)       return;
 
         this._state = newState;
         this.play(this._config.spritePrefix + newState, true);
-    }
-
-    _playHit() {
-
-        this._isHurt = true;
-        this.setTint(0xff4444);
-        this.setVelocity(0, 0);
-        this._state = EnemyState.HIT;
-
-        this.play(this._config.spritePrefix + EnemyState.HIT, true);
-
-        // Clear tint slightly before the animation ends
-        this.scene.time.delayedCall(120, () => {
-            if (this.active) this.clearTint();
-        });
-    }
-
-    _die() {
-
-        this._isDead = true;
-        this.setVelocity(0, 0);
-        this.setTint(0xff2222);
-
-        // Disable physics body so it no longer blocks / gets hit
-        this.body.enable = false;
-
-        this._state = EnemyState.DIE;
-        this.play(this._config.spritePrefix + EnemyState.DIE, true);
-
-        // animationcomplete handler above calls destroy() when done
     }
 }
