@@ -4,9 +4,9 @@
 class Player extends Phaser.Physics.Arcade.Sprite {
 
     static Direction = {
-        UP:    'up',
-        DOWN:  'down',
-        LEFT:  'left',
+        UP: 'up',
+        DOWN: 'down',
+        LEFT: 'left',
         RIGHT: 'right',
     };
 
@@ -28,9 +28,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
         this.DEBUG_HITBOX = debug;
 
-        this.lastDirection   = Player.Direction.DOWN;
-        this.isAttacking     = false;
-        this.comboQueued     = false;
+        this.lastDirection = Player.Direction.DOWN;
+        this.isAttacking = false;
+        this.comboQueued = false;
         this.comboWindowOpen = false;
 
         scene.add.existing(this);
@@ -42,16 +42,16 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
         // --- HealthComponent ---
         this.health = new HealthComponent(this, {
-            hp:      500,
-            iFrames: 600,   // ms of invincibility after each hit — prevents burst damage
-            debug:   true,  // logs all damage events to console — disable when done tuning
+            hp: 500,
+            iFrames: 600,
+            debug: true,
 
             onHit: (currentHp, maxHp, delta) => {
                 this.setTint(0xff4444);
                 this.scene.time.delayedCall(200, () => {
                     if (this.active) this.clearTint();
                 });
-                // TODO: play hit animation when asset is available
+                this.scene.sfx?.play('sfx-player-hit');
             },
 
             onDie: () => {
@@ -60,16 +60,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 this.setVelocity(0, 0);
                 this.setTint(0xff2222);
                 this.body.enable = false;
-                // TODO: play die animation when asset is available
                 this.scene.events.emit('player-died');
             },
         });
 
         // --- MeleeAttackComponent ---
         this.attack = new MeleeAttackComponent(this, {
-            damage:       25,
-            duration:     80,
-            hitboxSize:   { w: 60, h: 40 },
+            damage: 25,
+            duration: 80,
+            hitboxSize: { w: 60, h: 40 },
             targetsGroup: enemiesGroup,
             onHit: (target) => {
                 if (target.health) target.health.takeDamage(this.attack.damage);
@@ -80,7 +79,17 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             this._debugGraphics = scene.add.graphics().setDepth(1000);
         }
 
+        this.setPushable(false);
+        scene.physics.add.overlap(this, enemiesGroup, this._onCollideWithEnemies, null, scene);
+
         this.anims.play('idle-down');
+    }
+
+    _onCollideWithEnemies() {
+        if (this.health) {
+            this.health.takeDamage(100);
+            console.log("eeeeeeeeeeeeeeeeeeeeee");
+        }
     }
 
     /* ----------------------------------------------------------
@@ -96,8 +105,8 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
     _createAnimations() {
 
-        const row  = n => ({ start: n * 6,     end: n * 6 + 5 });
-        const row5 = n => ({ start: n * 6,     end: n * 6 + 4 });
+        const row = n => ({ start: n * 6, end: n * 6 + 5 });
+        const row5 = n => ({ start: n * 6, end: n * 6 + 4 });
 
         const add = (key, frames, fps, repeat = -1) =>
             this.scene.anims.create({
@@ -107,25 +116,25 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 repeat,
             });
 
-        add('walk-down',    row(0),  10);
-        add('walk-left',    row(1),  10);
-        add('walk-right',   row(2),  10);
-        add('walk-up',      row(3),  10);
+        add('walk-down', row(0), 10);
+        add('walk-left', row(1), 10);
+        add('walk-right', row(2), 10);
+        add('walk-up', row(3), 10);
 
-        add('idle-down',    row(4),  6);
-        add('idle-left',    row(5),  6);
-        add('idle-right',   row(6),  6);
-        add('idle-up',      row(7),  6);
+        add('idle-down', row(4), 6);
+        add('idle-left', row(5), 6);
+        add('idle-right', row(6), 6);
+        add('idle-up', row(7), 6);
 
-        add('attack-down',  row(8),  12, 0);
-        add('attack-up',    row(9),  12, 0);
-        add('attack-left',  row(10), 12, 0);
+        add('attack-down', row(8), 12, 0);
+        add('attack-up', row(9), 12, 0);
+        add('attack-left', row(10), 12, 0);
         add('attack-right', row(11), 12, 0);
 
-        add('parry-right',  row5(12), 10, 0);
-        add('parry-left',   row5(13), 10, 0);
-        add('parry-down',   row5(14), 10, 0);
-        add('parry-up',     row5(15), 10, 0);
+        add('parry-right', row5(12), 10, 0);
+        add('parry-left', row5(13), 10, 0);
+        add('parry-down', row5(14), 10, 0);
+        add('parry-up', row5(15), 10, 0);
     }
 
     _createInput() {
@@ -133,9 +142,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this._cursors = this.scene.input.keyboard.createCursorKeys();
 
         this._wasd = this.scene.input.keyboard.addKeys({
-            up:    Phaser.Input.Keyboard.KeyCodes.W,
-            down:  Phaser.Input.Keyboard.KeyCodes.S,
-            left:  Phaser.Input.Keyboard.KeyCodes.A,
+            up: Phaser.Input.Keyboard.KeyCodes.W,
+            down: Phaser.Input.Keyboard.KeyCodes.S,
+            left: Phaser.Input.Keyboard.KeyCodes.A,
             right: Phaser.Input.Keyboard.KeyCodes.D,
         });
 
@@ -174,31 +183,36 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         const { _cursors: cursors, _wasd: wasd } = this;
         const SPEED = 160;
 
-        const goLeft  = cursors.left.isDown  || wasd.left.isDown;
+        const goLeft = cursors.left.isDown || wasd.left.isDown;
         const goRight = cursors.right.isDown || wasd.right.isDown;
-        const goUp    = cursors.up.isDown    || wasd.up.isDown;
-        const goDown  = cursors.down.isDown  || wasd.down.isDown;
+        const goUp = cursors.up.isDown || wasd.up.isDown;
+        const goDown = cursors.down.isDown || wasd.down.isDown;
 
         let vx = 0;
         let vy = 0;
 
-        if (goLeft)  vx = -SPEED;
-        if (goRight) vx =  SPEED;
-        if (goUp)    vy = -SPEED;
-        if (goDown)  vy =  SPEED;
+        if (goLeft) vx = -SPEED;
+        if (goRight) vx = SPEED;
+        if (goUp) vy = -SPEED;
+        if (goDown) vy = SPEED;
 
         if (vx !== 0 && vy !== 0) {
             const D = SPEED * 0.7071;
-            vx = vx > 0 ?  D : -D;
-            vy = vy > 0 ?  D : -D;
+            vx = vx > 0 ? D : -D;
+            vy = vy > 0 ? D : -D;
         }
 
         this.setVelocity(vx, vy);
 
-        if (vx === 0 && vy === 0) {
+        const isMoving = vx !== 0 || vy !== 0;
+
+        if (!isMoving) {
             this.anims.play(`idle-${this.lastDirection}`, true);
             return;
         }
+
+        // Footstep sound — rate-limited inside SoundManager
+        this.scene.sfx?.footstep(this, 'player');
 
         if (goDown && !goUp) {
             this.lastDirection = Player.Direction.DOWN;
@@ -235,12 +249,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
         const dir = this.lastDirection;
 
-        this.isAttacking     = true;
-        this.comboQueued     = false;
+        this.isAttacking = true;
+        this.comboQueued = false;
         this.comboWindowOpen = false;
 
         this.setVelocity(0, 0);
         this.anims.play(`attack-${dir}`, true);
+
+        // Play swing sound at the moment the attack fires
+        this.scene.sfx?.play('sfx-player-attack');
 
         this.attack.trigger(dir);
 
@@ -257,7 +274,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
                 return;
             }
 
-            this.isAttacking     = false;
+            this.isAttacking = false;
             this.comboWindowOpen = false;
             this.anims.play(`idle-${dir}`);
         });

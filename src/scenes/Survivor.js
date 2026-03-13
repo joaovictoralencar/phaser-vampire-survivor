@@ -32,6 +32,15 @@ class Survivor extends Phaser.Scene {
         this.load.once('filecomplete-json-enemy-creepy', (_key, _type, config) => {
             this._loadEnemySpritesheets(config);
         });
+
+        // ── Audio manifest ─────────────────────────────────────
+        // Load sounds.json first; once it's ready, load every audio
+        // file it describes so they're all in cache before create().
+        this.load.json('sounds', 'assets/audio/sounds.json');
+
+        this.load.once('filecomplete-json-sounds', (_key, _type, manifest) => {
+            this._loadAudioFromManifest(manifest);
+        });
     }
 
     /* =========================================================
@@ -56,6 +65,21 @@ class Survivor extends Phaser.Scene {
         });
 
         this.enemies.getChildren().forEach(e => e.setTarget(this.player));
+
+        // ── SoundManager ───────────────────────────────────────
+        // Must be created after sounds.json and audio files are loaded.
+        // Player and Enemy access it via this.scene.sfx.
+        this.sfx = new SoundManager(this, {
+            masterVolume: 1,
+            bgmVolume:    1,
+        });
+
+        // Start BGM — plays the first entry in sounds.json "bgm" array.
+        // Pass a key string to choose a specific track: this.sfx.startBgm('bgm-main')
+        this.sfx.startBgm();
+
+        // Schedule ambient moans for each enemy
+        this.enemies.getChildren().forEach(e => this.sfx.scheduleMoan(e));
 
         // ── DamageText ──────────────────────────────────────────
         this.damageText = new DamageText(this, {
@@ -98,69 +122,85 @@ class Survivor extends Phaser.Scene {
     ========================================================= */
 
     _onPlayerDied() {
+
+        this.sfx?.stopBgm();
+
         if (this._hudHpValue) {
             this._hudHpValue.setText('0');
             this._hudHpValue.setColor('#ff4444');
         }
         if (this._hudHpBar) this._hudHpBar.setScale(0, 1);
+
         console.log('Player died — game over');
+    }
+
+    /* =========================================================
+       AUDIO LOADING
+    ========================================================= */
+
+    /**
+     * Iterates sounds.json and calls this.load.audio() for every
+     * bgm and sfx entry. Runs inside a filecomplete callback so
+     * the JSON is guaranteed to be parsed before we read it.
+     */
+    _loadAudioFromManifest(manifest) {
+
+        const entries = [
+            ...(manifest.bgm ?? []),
+            ...(manifest.sfx ?? []),
+        ];
+
+        for (const entry of entries) {
+            if (entry.key && entry.path) {
+                this.load.audio(entry.key, entry.path);
+            }
+        }
     }
 
     /* =========================================================
        HUD  (bottom-left)
     ========================================================= */
 
-    /**
-     * All text objects call .setResolution(this._hudRes) so they render
-     * at native DPI before the pixelArt canvas filter applies.
-     * Without this, pixelArt: true makes every Phaser text look blurry.
-     */
     _createHud(width, height) {
 
-        const FONT    = 'Roboto, sans-serif';
-        const PAD     = 16;
-        const BAR_W   = 120;
-        const BAR_H   = 8;
-        const maxHp   = this.player.health.maxHp;
+        const FONT  = 'Roboto, sans-serif';
+        const PAD   = 16;
+        const BAR_W = 120;
+        const BAR_H = 8;
+        const maxHp = this.player.health.maxHp;
 
-        // Native DPI resolution for crisp text despite pixelArt mode
-        this._hudRes  = window.devicePixelRatio || 2;
+        this._hudRes = window.devicePixelRatio || 2;
 
         const barY  = height - PAD - 26;
         const textY = height - PAD;
 
-        // ── HP bar ─────────────────────────────────────────────
+        // HP bar track
         this.add.rectangle(PAD, barY, BAR_W, BAR_H, 0x333333)
             .setOrigin(0, 0).setDepth(9999).setScrollFactor(0);
 
+        // HP bar fill
         this._hudHpBar = this.add.rectangle(PAD, barY, BAR_W, BAR_H, 0x44dd44)
             .setOrigin(0, 0).setDepth(10000).setScrollFactor(0);
 
-        // ── HP text ────────────────────────────────────────────
+        // Heart icon
         this._hudHpLabel = this.add.text(PAD, textY, '❤', {
             fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#ff4444',
-        })
-            .setOrigin(0, 1).setDepth(10000).setScrollFactor(0)
-            .setResolution(this._hudRes);
+        }).setOrigin(0, 1).setDepth(10000).setScrollFactor(0).setResolution(this._hudRes);
 
+        // Current HP
         this._hudHpValue = this.add.text(PAD + 20, textY, `${maxHp}`, {
             fontFamily: FONT, fontStyle: 'bold', fontSize: '14px', color: '#ffffff',
-        })
-            .setOrigin(0, 1).setDepth(10000).setScrollFactor(0)
-            .setResolution(this._hudRes);
+        }).setOrigin(0, 1).setDepth(10000).setScrollFactor(0).setResolution(this._hudRes);
 
+        // Max HP
         this._hudHpMax = this.add.text(0, textY, ` / ${maxHp}`, {
             fontFamily: FONT, fontSize: '12px', color: '#aaaaaa',
-        })
-            .setOrigin(0, 1).setDepth(10000).setScrollFactor(0)
-            .setResolution(this._hudRes);
+        }).setOrigin(0, 1).setDepth(10000).setScrollFactor(0).setResolution(this._hudRes);
 
-        // ── Control hint (bottom-right) ────────────────────────
+        // Control hint
         this._hudHint = this.add.text(width - PAD, height - PAD, 'K  —  Attack', {
             fontFamily: FONT, fontSize: '13px', color: '#cccccc', alpha: 0.70,
-        })
-            .setOrigin(1, 1).setDepth(10000).setScrollFactor(0)
-            .setResolution(this._hudRes);
+        }).setOrigin(1, 1).setDepth(10000).setScrollFactor(0).setResolution(this._hudRes);
     }
 
     _updateHud() {
@@ -226,9 +266,7 @@ class Survivor extends Phaser.Scene {
         this.make.tileSprite({
             x: 0, y: 0, width, height,
             key: 'grass1', origin: { x: 0, y: 0 }, add: true,
-        })
-            .setDepth(0)
-            .setTileScale(scale, scale);
+        }).setDepth(0).setTileScale(scale, scale);
 
         if (!detail) return;
 

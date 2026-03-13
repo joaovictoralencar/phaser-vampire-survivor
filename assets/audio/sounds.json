@@ -1,0 +1,90 @@
+{
+  "bgm": [
+    {
+      "key": "bgm-main",
+      "path": "assets/audio/bgm/Christopher_Baklid_-_Time_Field.ogg",
+      "volume": 0.45,
+      "loop": true,
+      "_note": "Main gameplay loop."
+    },
+    {
+      "key": "bgm-boss",
+      "path": "assets/audio/bgm/boss_theme.mp3",
+      "volume": 0.5,
+      "loop": true,
+      "_note": "Reserved for a boss encounter. Call sfx.startBgm('bgm-boss') to switch."
+    }
+  ],
+  "sfx": [
+    {
+      "key": "sfx-player-step",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Character/Footsteps_walking.wav",
+      "volume": 0.3,
+      "detune": 80,
+      "_note": "Single grass footstep. SoundManager rate-limits the cadence."
+    },
+    {
+      "key": "sfx-enemy-step",
+      "path": "assets/audio/400 Sounds Pack/Footsteps/foley_footstep_concrete_4.wav",
+      "volume": 0.1,
+      "detune": 80,
+      "_note": "Heavier shuffle sound for enemy walking."
+    },
+    {
+      "key": "sfx-enemy-moan-1",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Monsters & Ghosts/Monster_growl_1.wav",
+      "volume": 0.25,
+      "detune": 40,
+      "_note": "Ambient idle groan, picked randomly alongside moan-2."
+    },
+    {
+      "key": "sfx-enemy-moan-2",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Monsters & Ghosts/Monster_grunt x2 (ghmmm).wav",
+      "volume": 0.25,
+      "detune": 40,
+      "_note": "Ambient idle groan, variant 2."
+    },
+    {
+      "key": "sfx-player-attack",
+      "path": "assets/audio/400 Sounds Pack/Other/whoosh_1.wav",
+      "volume": 0.65,
+      "detune": 60,
+      "_note": "Sword whoosh on every player swing."
+    },
+    {
+      "key": "sfx-enemy-attack1",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Monsters & Ghosts/Zombie_8.wav",
+      "volume": 0.25,
+      "detune": 60,
+      "_note": "Enemy attack animation 1."
+    },
+    {
+      "key": "sfx-enemy-attack2",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Monsters & Ghosts/Zombie_8.wav",
+      "volume": 0.25,
+      "detune": 60,
+      "_note": "Enemy attack animation 2, slightly heavier than attack1."
+    },
+    {
+      "key": "sfx-player-hit",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Character/Gasp.wav",
+      "volume": 0.60,
+      "detune": 50,
+      "_note": "Player pain grunt when taking damage."
+    },
+    {
+      "key": "sfx-enemy-hit",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Monsters & Ghosts/Injured.wav",
+      "volume": 0.55,
+      "detune": 100,
+      "_note": "Wide detune range so rapid hits on the same enemy sound varied."
+    },
+    {
+      "key": "sfx-enemy-die",
+      "path": "assets/audio/Horror SFX Free/Horror SFX Free/Monsters & Ghosts/Gore_Wet_4.wav",
+      "volume": 0.70,
+      "detune": 60,
+      "_note": "Enemy death wail."
+    }
+  ]
+}

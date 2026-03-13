@@ -34,7 +34,7 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
 
         scene.add.existing(this);
         scene.physics.add.existing(this);
-
+        this.setPushable(false);
         this._setupPhysics();
         this._setupAnimEvents();
 
@@ -51,6 +51,9 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.scene.time.delayedCall(120, () => {
                     if (this.active) this.clearTint();
                 });
+
+                // Hit sound
+                this.scene.sfx?.play('sfx-enemy-hit');
             },
 
             onDie: () => {
@@ -59,6 +62,9 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
                 this.setTint(0xff2222);
                 this.body.enable = false;
                 this.play(this._config.spritePrefix + EnemyState.DIE, true);
+
+                // Death sound
+                this.scene.sfx?.play('sfx-enemy-die');
             },
         });
     }
@@ -163,6 +169,9 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
         this._setState(EnemyState.WALK);
         this.scene.physics.moveToObject(this, this._target, this.speed);
         this.setFlipX(this._target.x < this.x);
+
+        // Footstep sound — rate-limited inside SoundManager
+        this.scene.sfx?.footstep(this, 'enemy');
     }
 
     _tryAttack() {
@@ -177,23 +186,25 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
             : EnemyState.ATTACK2;
 
         this._setState(attackKey);
+
+        // Play the matching attack sound immediately when the animation starts
+        const sfxKey = attackKey === EnemyState.ATTACK1
+            ? 'sfx-enemy-attack1'
+            : 'sfx-enemy-attack2';
+        this.scene.sfx?.play(sfxKey);
+
         this._scheduleDamageHit();
     }
 
     /**
      * Deals damage at the visual mid-point of the attack animation.
-     *
-     * Uses a directional cone check instead of a plain radius so the
-     * hit only lands when the target is roughly in front of the enemy —
-     * matching the visible swing direction.
-     *
-     *   dot product of (enemy→target) · (enemy facing) > threshold
-     *   means the target is within ~45° of the facing direction.
+     * Uses a directional cone check so the hit only lands when the
+     * target is roughly in front of the enemy.
      */
     _scheduleDamageHit() {
 
-        const HIT_DELAY   = 350;   // ms — adjust to match the swing frame
-        const DOT_MIN     = 0.5;   // cos(60°) — target must be within 60° of facing
+        const HIT_DELAY = 350;
+        const DOT_MIN   = 0.5;
 
         this.scene.time.delayedCall(HIT_DELAY, () => {
 
@@ -207,15 +218,8 @@ class Enemy extends Phaser.Physics.Arcade.Sprite {
 
             if (dist > this._attackRadius) return;
 
-            // Facing direction: sprite is flipped when target is to the left
-            // Use the raw dx to derive a normalised facing vector
-            const facingX = this.flipX ? -1 : 1;
-
-            // Normalise enemy→target vector and dot against facing
-            const dot = (dx / dist) * facingX;
-
-            // Additionally bias downward hits: if target is mostly below,
-            // relax the horizontal dot threshold so the attack still lands
+            const facingX   = this.flipX ? -1 : 1;
+            const dot       = (dx / dist) * facingX;
             const targetBelow = dy > 0 && Math.abs(dy) > Math.abs(dx);
             const passes      = targetBelow || dot >= DOT_MIN;
 
