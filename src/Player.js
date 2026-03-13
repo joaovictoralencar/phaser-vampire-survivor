@@ -80,15 +80,15 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         }
 
         this.setPushable(false);
-        scene.physics.add.overlap(this, enemiesGroup, this._onCollideWithEnemies, null, scene);
+        scene.physics.add.overlap(this, enemiesGroup, this._onCollideWithEnemies, null, this);
 
         this.anims.play('idle-down');
     }
 
-    _onCollideWithEnemies() {
+    _onCollideWithEnemies(player, enemy) {
+        if (enemy.health?.isDead) return;   // don't punish contact with dying enemies
         if (this.health) {
-            this.health.takeDamage(100);
-            console.log("eeeeeeeeeeeeeeeeeeeeee");
+            this.health.takeDamage(enemy.damage ?? 10);
         }
     }
 

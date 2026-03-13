@@ -57,6 +57,7 @@ class Survivor extends Phaser.Scene {
         this._createEnemyAnimations(creepyConfig);
 
         this.enemies = this.physics.add.group({ runChildUpdate: true });
+        this.physics.add.collider(this.enemies, this.enemies);
         this._spawnEnemies(creepyConfig, 10, width, height);
 
         this.player = new Player(this, width / 2, height / 2, {
