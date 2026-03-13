@@ -10,6 +10,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         RIGHT: 'right',
     };
 
+    // Dash tuning — tweak these constants to adjust feel
+    static DASH_SPEED    = 520;  // px/s during the dash burst
+    static DASH_DURATION = 180;  // ms the dash lasts
+    static DASH_COOLDOWN = 500;  // ms before the player can dash again
+
     /* ----------------------------------------------------------
        Constructor
     ---------------------------------------------------------- */
@@ -32,6 +37,10 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this.isAttacking = false;
         this.comboQueued = false;
         this.comboWindowOpen = false;
+
+        // Dash state
+        this.isDashing  = false;  // true for the duration of the burst
+        this._dashReady = true;   // false while on cooldown
 
         scene.add.existing(this);
         scene.physics.add.existing(this);
@@ -56,6 +65,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
             onDie: () => {
                 this.isAttacking = false;
+                this.isDashing   = false;
                 this.attack.cancel();
                 this.setVelocity(0, 0);
                 this.setTint(0xff2222);
@@ -151,6 +161,11 @@ class Player extends Phaser.Physics.Arcade.Sprite {
         this._attackKey = this.scene.input.keyboard.addKey(
             Phaser.Input.Keyboard.KeyCodes.K
         );
+
+        // Dash key — Space bar. Change KeyCodes here if you want a different binding.
+        this._dashKey = this.scene.input.keyboard.addKey(
+            Phaser.Input.Keyboard.KeyCodes.SPACE
+        );
     }
 
     /* ----------------------------------------------------------
@@ -163,6 +178,7 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
         if (this.health.isDead) return;
 
+        this._handleDash();
         this._handleMovement();
         this._handleAttack();
 
@@ -175,8 +191,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
     _handleMovement() {
 
-        if (this.isAttacking) {
-            this.setVelocity(0, 0);
+        // Velocity is owned by the dash — don't fight it
+        if (this.isAttacking || this.isDashing) {
+            if (!this.isDashing) this.setVelocity(0, 0);
             return;
         }
 
@@ -235,6 +252,9 @@ class Player extends Phaser.Physics.Arcade.Sprite {
 
     _handleAttack() {
 
+        // Prevent attacking mid-dash — avoids hitbox weirdness
+        if (this.isDashing) return;
+
         if (!Phaser.Input.Keyboard.JustDown(this._attackKey)) return;
 
         if (this.isAttacking) {
@@ -278,6 +298,90 @@ class Player extends Phaser.Physics.Arcade.Sprite {
             this.comboWindowOpen = false;
             this.anims.play(`idle-${dir}`);
         });
+    }
+
+    /* ----------------------------------------------------------
+       Dash
+    ---------------------------------------------------------- */
+
+    _handleDash() {
+
+        if (!Phaser.Input.Keyboard.JustDown(this._dashKey)) return;
+        if (!this._dashReady) return;
+        if (this.isDashing)   return;
+
+        // Can dash out of an attack — cancel it so the dash feels responsive
+        if (this.isAttacking) {
+            this.isAttacking     = false;
+            this.comboQueued     = false;
+            this.comboWindowOpen = false;
+            this.attack.cancel();
+        }
+
+        this._startDash();
+    }
+
+    _startDash() {
+
+        this.isDashing  = true;
+        this._dashReady = false;
+
+        // Snapshot iFrame state BEFORE we touch it so _endDash can
+        // restore it correctly without stomping a legitimate hit-stun.
+        this._dashPreIFrame = this.health._iFrame;
+        this.health._iFrame = true;   // invincible for the dash duration
+
+        // Derive velocity from the last known direction
+        const dirVectors = {
+            [Player.Direction.UP]:    { vx:  0, vy: -1 },
+            [Player.Direction.DOWN]:  { vx:  0, vy:  1 },
+            [Player.Direction.LEFT]:  { vx: -1, vy:  0 },
+            [Player.Direction.RIGHT]: { vx:  1, vy:  0 },
+        };
+
+        const { vx, vy } = dirVectors[this.lastDirection];
+        this.setVelocity(
+            vx * Player.DASH_SPEED,
+            vy * Player.DASH_SPEED
+        );
+
+        // Visual feedback — alpha pulse while no dedicated animation exists.
+        // TODO: replace with this.anims.play(`dash-${this.lastDirection}`, true)
+        //       once the spritesheet row is available.
+        this.setAlpha(0.5);
+        this.scene.tweens.add({
+            targets:  this,
+            alpha:    1,
+            duration: Player.DASH_DURATION,
+            ease:     'Quad.Out',
+        });
+
+        // End the burst after DASH_DURATION
+        this.scene.time.delayedCall(Player.DASH_DURATION, () => this._endDash());
+
+        // Cooldown runs in parallel with the burst
+        this.scene.time.delayedCall(Player.DASH_COOLDOWN, () => {
+            this._dashReady = true;
+        });
+    }
+
+    _endDash() {
+
+        if (!this.isDashing) return;  // guard against double-calls
+
+        this.isDashing = false;
+        this.setVelocity(0, 0);
+
+        // Only lift the iFrame we set. If the player was already invincible
+        // before the dash started (e.g. mid hit-stun), leave it alone so
+        // HealthComponent's own timer can clear it naturally.
+        if (!this._dashPreIFrame) {
+            this.health._iFrame = false;
+        }
+
+        // TODO: play a short dash-recovery animation here, then on
+        //       animationcomplete resume idle/walk normally.
+        this.anims.play(`idle-${this.lastDirection}`, true);
     }
 
     /* ----------------------------------------------------------
